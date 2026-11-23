@@ -972,21 +972,10 @@ impl Dialog {
                 json!({"pivot": p("pivot"), "name": p("name"), "formula": p("formula")}),
             ),
             "pivotChangeSource" => {
-                // The command passes the PivotTable it resolved; opening the dialog directly uses
-                // the report that contains the active cell, the same one the field pane shows.
-                let current = app.session.active().and_then(|d| {
-                    let sh = d.wb.active()?;
-                    let at = d.selection.active;
-                    let pt = sh.pivots.iter().find(|pt| pt.last_range.is_some_and(|r| r.contains(at)) || pt.anchor == at).or(sh.pivots.last())?;
-                    Some((pt.name.clone(), pt.source.clone()))
-                });
-                let pivot = p("pivot").as_str().map(str::to_string).or_else(|| current.as_ref().map(|(name, _)| name.clone()));
-                let source = p("source")
-                    .as_str()
-                    .filter(|s| !s.trim().is_empty())
-                    .map(str::to_string)
-                    .or_else(|| current.map(|(_, source)| source))
-                    .unwrap_or_default();
+                // An explicit source stays as given. Otherwise the source is the supplied
+                // PivotTable's. The active cell's report is used only when no PivotTable is
+                // supplied, and the reference shown is that chosen target's source.
+                let (pivot, source) = pivot_change_source_defaults(app, &params);
                 Dialog::form(
                     "pivotChangeSource",
                     "Change PivotTable Data Source",
@@ -1165,6 +1154,73 @@ impl Dialog {
     }
 }
 
+/// Whether `pivot` names a PivotTable to edit, rather than leaving the choice to the active cell.
+fn pivot_param_supplied(v: &Json) -> bool {
+    match v {
+        Json::Null => false,
+        Json::String(s) => !s.trim().is_empty(),
+        _ => true,
+    }
+}
+
+/// The PivotTable `want` names (its name, ignoring case, or its id), on the active sheet first.
+fn pivot_from_param(app: &SheetApp, want: &Json) -> Option<(String, String)> {
+    let doc = app.session.active()?;
+    let active = doc.wb.active_sheet();
+    let count = doc.wb.sheets.len();
+    let order = std::iter::once(active).chain((0..count).filter(move |i| *i != active));
+    for si in order {
+        let Some(sheet) = doc.wb.sheet(si) else { continue };
+        if let Some(pt) = sheet.pivots.iter().find(|pt| match want {
+            Json::String(name) => pt.name.eq_ignore_ascii_case(name.trim()),
+            Json::Number(n) => n.as_u64() == Some(u64::from(pt.id)),
+            _ => false,
+        }) {
+            return Some((pt.name.clone(), pt.source.clone()));
+        }
+    }
+    None
+}
+
+/// The report the active cell belongs to, the same one the field pane shows; the sheet's last
+/// report when the cell is in none. That is the PivotTable `pivot.changeSource` edits when no
+/// PivotTable is named.
+fn active_report(app: &SheetApp) -> Option<(String, String)> {
+    let doc = app.session.active()?;
+    let sheet = doc.wb.active()?;
+    let at = doc.selection.active;
+    let pt = sheet.pivots.iter().find(|pt| pt.last_range.is_some_and(|r| r.contains(at)) || pt.anchor == at).or(sheet.pivots.last())?;
+    Some((pt.name.clone(), pt.source.clone()))
+}
+
+/// Pivot and source Change PivotTable Data Source opens with.
+///
+/// An explicit `source` is kept. Otherwise the source is the supplied PivotTable's. The active
+/// cell's report is used only when no PivotTable is supplied. The reference is that target's source.
+fn pivot_change_source_defaults(app: &SheetApp, params: &Json) -> (Json, String) {
+    let explicit = params.get("source").and_then(Json::as_str).filter(|s| !s.trim().is_empty()).map(str::to_string);
+    let supplied = params.get("pivot").filter(|v| pivot_param_supplied(v));
+    let found = supplied.and_then(|v| pivot_from_param(app, v));
+    if let Some(source) = explicit {
+        let pivot = found
+            .map(|(name, _)| json!(name))
+            .or_else(|| supplied.cloned())
+            .or_else(|| active_report(app).map(|(name, _)| json!(name)))
+            .unwrap_or(Json::Null);
+        return (pivot, source);
+    }
+    if let Some(value) = supplied {
+        return match found {
+            Some((name, source)) => (json!(name), source),
+            None => (value.clone(), String::new()),
+        };
+    }
+    match active_report(app) {
+        Some((name, source)) => (json!(name), source),
+        None => (Json::Null, String::new()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1319,5 +1375,59 @@ mod tests {
         let d = Dialog::open(&mut app, "dataValidation", json!({})).unwrap();
         assert_eq!(d.values["type"], "list");
         assert!(d.values.get("formula1").is_none());
+    }
+
+    /// Two reports: `Near` holds the active cell on Sheet1, `Far` lives on Sheet2.
+    fn two_reports() -> (SheetApp, String, String, u32) {
+        let mut session = gridcraft_engine::Session::default();
+        session.new_workbook();
+        session.execute("range.setValues", json!({"range": "A1", "values": [["Region", "Sales"], ["East", 100], ["West", 80]]})).unwrap();
+        session
+            .execute("insert.pivotTable", json!({"name": "Near", "source": "A1:B3", "destination": "A6", "rows": ["Region"], "values": ["Sales"]}))
+            .unwrap();
+        session.execute("home.insertSheet", json!({"name": "Sheet2"})).unwrap();
+        session
+            .execute("range.setValues", json!({"range": "A1", "values": [["Region", "Sales"], ["North", 10], ["South", 20], ["North", 5]]}))
+            .unwrap();
+        session
+            .execute("insert.pivotTable", json!({"name": "Far", "source": "A1:B4", "destination": "A8", "rows": ["Region"], "values": ["Sales"]}))
+            .unwrap();
+        session.execute("sheet.activate", json!({"sheet": "Sheet1"})).unwrap();
+        let (anchor, near_source, far_source, far_id) = {
+            let wb = &session.active().unwrap().wb;
+            let report = |name: &str| wb.sheets.iter().flat_map(|sh| sh.pivots.iter()).find(|pt| pt.name == name).unwrap();
+            let near = report("Near");
+            let far = report("Far");
+            (near.anchor.a1(), near.source.clone(), far.source.clone(), far.id)
+        };
+        assert_ne!(near_source, far_source, "the two reports start from different ranges");
+        session.execute("selection.set", json!({"cell": anchor})).unwrap();
+        (SheetApp::new(session, Default::default()), near_source, far_source, far_id)
+    }
+
+    #[test]
+    fn change_source_dialog_keeps_an_explicit_source_and_otherwise_uses_the_named_pivot() {
+        let (mut app, near_source, far_source, far_id) = two_reports();
+        let open = |app: &mut SheetApp, params: Json| Dialog::open(app, "pivotChangeSource", params).unwrap();
+
+        let named = open(&mut app, json!({"pivot": "far"}));
+        assert_eq!(named.values["pivot"], json!("Far"));
+        assert_eq!(named.values["source"], json!(far_source));
+
+        let by_id = open(&mut app, json!({"pivot": far_id}));
+        assert_eq!(by_id.values["pivot"], json!("Far"));
+        assert_eq!(by_id.values["source"], json!(far_source));
+
+        let explicit = open(&mut app, json!({"pivot": "Far", "source": "Sheet9!$A$1:$B$2"}));
+        assert_eq!(explicit.values["pivot"], json!("Far"));
+        assert_eq!(explicit.values["source"], json!("Sheet9!$A$1:$B$2"));
+
+        let missing = open(&mut app, json!({"pivot": "Missing"}));
+        assert_eq!(missing.values["pivot"], json!("Missing"));
+        assert_eq!(missing.values["source"], json!(""));
+
+        let active = open(&mut app, json!({}));
+        assert_eq!(active.values["pivot"], json!("Near"));
+        assert_eq!(active.values["source"], json!(near_source));
     }
 }

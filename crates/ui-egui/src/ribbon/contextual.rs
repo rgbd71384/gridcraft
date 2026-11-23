@@ -4,13 +4,13 @@ use super::{Color32, Icon, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, big_
 
 /// Draws the PivotTable Analyze tab while the active cell is in a PivotTable report.
 pub(super) fn pivot_analyze(app: &mut SheetApp, ui: &mut Ui) {
-    if crate::pivot_pane::active_pivot(app).is_none() {
+    let Some(pivot) = crate::pivot_pane::active_pivot(app) else {
         return;
-    }
+    };
     let __k = big_button(ui, Icon::Table, "Change Data\nSource", "Change Data Source", false);
     control_keytip(app, ui, &__k, "pivot.changeSource");
     if __k.clicked() {
-        act(app, "pivot.changeSource", json!({}));
+        act(app, "pivot.changeSource", json!({"pivot": pivot}));
     }
 }
 
