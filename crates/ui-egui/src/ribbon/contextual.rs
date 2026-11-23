@@ -2,6 +2,18 @@ use super::controls::{act, anchor_keytip, control_keytip, keytip, menu_items, se
 use super::galleries::{paint_table_swatch, table_gallery};
 use super::{Color32, Icon, Sense, SheetApp, Stroke, StrokeKind, Tokens, Ui, big_button, icon_button, json, keytip_table, vec2};
 
+/// Draws the PivotTable Analyze tab while the active cell is in a PivotTable report.
+pub(super) fn pivot_analyze(app: &mut SheetApp, ui: &mut Ui) {
+    if crate::pivot_pane::active_pivot(app).is_none() {
+        return;
+    }
+    let __k = big_button(ui, Icon::Table, "Change Data\nSource", "Change Data Source", false);
+    control_keytip(app, ui, &__k, "pivot.changeSource");
+    if __k.clicked() {
+        act(app, "pivot.changeSource", json!({}));
+    }
+}
+
 /// Draws the Table Design tab: rename, resize, remove duplicates, convert to range, slicer, table options and the style strip.
 pub(super) fn table_design(app: &mut SheetApp, ui: &mut Ui) {
     let Some((tname, header, totals, banded, banded_c, first, last, filter, style)) = app.session.active().and_then(|d| {

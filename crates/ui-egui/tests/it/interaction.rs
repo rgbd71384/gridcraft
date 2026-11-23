@@ -809,6 +809,7 @@ fn dialogs_open_and_close() {
         "spelling",
         "goTo",
         "pivotCalculatedField",
+        "pivotChangeSource",
         "about",
         "macros",
         "recordMacro",

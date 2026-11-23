@@ -356,6 +356,10 @@ pub(super) fn ref_edit(app: &SheetApp, ui: &mut egui::Ui, d: &mut Dialog, key: &
             RefLabel::By(label) => r.labelled_by(label),
             RefLabel::Named(name) => r.accessible_name(lang.tr(name)),
         };
+        // A form whose first field is this box opens ready to type, as a text field does.
+        if d.focus_first_field {
+            super::show::take_first_focus(d, &r);
+        }
         // F4 cycles the anchors of the reference in the box, as in Excel's reference boxes.
         if r.has_focus() && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F4)) {
             s = cycle_anchors(&s);

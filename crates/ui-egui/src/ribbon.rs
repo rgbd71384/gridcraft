@@ -27,7 +27,7 @@ mod title_bar;
 mod view;
 
 use automate::automate;
-use contextual::{chart_design, table_design};
+use contextual::{chart_design, pivot_analyze, table_design};
 pub(crate) use controls::{ComboResult, editable_combo};
 use controls::{act, keytip};
 use data::data;
@@ -155,6 +155,7 @@ pub fn show(app: &mut SheetApp, ui: &mut Ui) {
                             "Automate" => automate(app, ui),
                             "Table Design" => table_design(app, ui),
                             "Chart Design" => chart_design(app, ui),
+                            "PivotTable Analyze" => pivot_analyze(app, ui),
                             crate::paper_view::TAB => crate::paper_view::ribbon_tab(app, ui),
                             _ => home(app, ui),
                         }
@@ -274,7 +275,7 @@ fn theme_choices(app: &mut SheetApp, ui: &mut Ui) {
     }
 }
 
-const CONTEXTUAL_TABS: [&str; 3] = ["Table Design", "Chart Design", crate::paper_view::TAB];
+const CONTEXTUAL_TABS: [&str; 4] = ["Table Design", "Chart Design", "PivotTable Analyze", crate::paper_view::TAB];
 
 fn contextual_tabs(app: &SheetApp) -> Vec<&'static str> {
     let mut v = Vec::new();
@@ -286,6 +287,9 @@ fn contextual_tabs(app: &SheetApp) -> Vec<&'static str> {
         }
         if app.selected_chart().is_some_and(|id| sh.charts.iter().any(|c| c.id == id)) {
             v.push("Chart Design");
+        }
+        if crate::pivot_pane::active_pivot(app).is_some() {
+            v.push("PivotTable Analyze");
         }
         if app.grid.hf_edit.is_some() {
             v.push(crate::paper_view::TAB);

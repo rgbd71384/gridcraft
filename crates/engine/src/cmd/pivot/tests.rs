@@ -402,6 +402,25 @@ fn values_stay_last_in_columns() {
 }
 
 #[test]
+fn change_source_without_a_source_opens_the_dialog() {
+    let mut s = sales();
+    s.execute("insert.pivotTable", json!({"rows": ["Region"], "values": ["Sales"]})).unwrap();
+    let before = pt(&s).source.clone();
+    s.ui_requests.clear();
+    s.execute("pivot.changeSource", json!({})).unwrap();
+    let Some(crate::UiRequest::Dialog(name, params)) = s.ui_requests.last() else {
+        panic!("menu-style call opens the dialog, got {:?}", s.ui_requests);
+    };
+    assert_eq!(name, "pivotChangeSource");
+    assert_eq!(params["pivot"], json!("PivotTable1"));
+    assert_eq!(params["source"].as_str(), Some(before.as_str()));
+    assert_eq!(pt(&s).source, before, "opening the dialog leaves the report's source");
+    let err = s.execute("pivot.changeSource", json!({"source": "  "})).unwrap_err().to_string();
+    assert!(err.contains("isn't valid"), "{err}");
+    assert_eq!(pt(&s).source, before);
+}
+
+#[test]
 fn change_source_keeps_values_ahead_of_its_field() {
     let mut s = sales();
     s.execute("insert.pivotTable", json!({"rows": ["Region", "Product"], "values": ["Sales", "Units"]})).unwrap();

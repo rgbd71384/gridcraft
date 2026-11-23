@@ -101,7 +101,8 @@ No alpha blockers: every core workflow passes the [alpha gate](roadmap.md#alpha-
   values on rows and GETPIVOTDATA done). Show Details (double-click a value, subtotal or grand total cell) lists
   its source records on a new sheet. The "Enable show details" option (`pivot.options`
   `enableShowDetails`, saved as `enableDrill`) turns it off; it has no PivotTable Options dialog
-  yet (command only).
+  yet (command only). PivotTable Analyze ▸ Change Data Source points the report at another range
+  or table (`pivot.changeSource`).
 - **Impact:** pivots are the analyst's main tool.
 - **Estimate:** 20–30 h for beta (25–40 h full).
 
@@ -196,6 +197,7 @@ No alpha blockers: every core workflow passes the [alpha gate](roadmap.md#alpha-
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-23 | minor | §8: PivotTable Analyze ▸ Change Data Source (`pivot.changeSource`) |
 | 2026-11-02 | minor | §17: equations (Insert › Equation, LaTeX source, gallery, editor) |
 | 2026-11-02 | minor | §13: Solver Sensitivity report: shadow prices, reduced costs and allowable ranges for Simplex LP; Lagrange multipliers and reduced gradients for GRG Nonlinear |
 | 2026-11-02 | minor | §4: charts, like every floating object, move and resize from eight handles (#190), so resizing is no longer listed as missing; the evidence is one paragraph again, without the stale "PRs #158, #161 open" |

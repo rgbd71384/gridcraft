@@ -971,6 +971,30 @@ impl Dialog {
                 vec![Text { key: "name", label: "Name:" }, Text { key: "formula", label: "Formula:" }],
                 json!({"pivot": p("pivot"), "name": p("name"), "formula": p("formula")}),
             ),
+            "pivotChangeSource" => {
+                // The command passes the PivotTable it resolved; opening the dialog directly uses
+                // the report that contains the active cell, the same one the field pane shows.
+                let current = app.session.active().and_then(|d| {
+                    let sh = d.wb.active()?;
+                    let at = d.selection.active;
+                    let pt = sh.pivots.iter().find(|pt| pt.last_range.is_some_and(|r| r.contains(at)) || pt.anchor == at).or(sh.pivots.last())?;
+                    Some((pt.name.clone(), pt.source.clone()))
+                });
+                let pivot = p("pivot").as_str().map(str::to_string).or_else(|| current.as_ref().map(|(name, _)| name.clone()));
+                let source = p("source")
+                    .as_str()
+                    .filter(|s| !s.trim().is_empty())
+                    .map(str::to_string)
+                    .or_else(|| current.map(|(_, source)| source))
+                    .unwrap_or_default();
+                Dialog::form(
+                    "pivotChangeSource",
+                    "Change PivotTable Data Source",
+                    "pivot.changeSource",
+                    vec![Ref { key: "source", label: "Table/Range:" }],
+                    json!({"pivot": pivot, "source": source}),
+                )
+            }
             "goToSpecial" => Dialog::form(
                 "goToSpecial",
                 "Go To Special",

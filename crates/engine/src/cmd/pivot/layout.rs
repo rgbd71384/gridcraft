@@ -3,7 +3,7 @@ use super::fields::{canonical, in_axes, shift_values, update};
 use super::params::{group_param, layout_name};
 use super::{
     Chart, Json, PivotDateGroup, PivotField, PivotFilter, PivotLayout, PivotSort, PivotTable, Result, Session, bad, bool_param, edit, find_pivot,
-    json, other, pv, str_param,
+    json, ok, other, pv, str_param,
 };
 
 pub(super) fn filter(s: &mut Session, p: &Json) -> Result<Json> {
@@ -229,9 +229,20 @@ pub(super) fn refresh_all(s: &mut Session, p: &Json) -> Result<Json> {
 }
 
 pub(super) fn change_source(s: &mut Session, p: &Json) -> Result<Json> {
-    const C: &str = "pivot.changeSource";
-    if str_param(p, "source").or_else(|| str_param(p, "range")).is_none() {
-        return Err(bad(C, "missing `source`"));
+    let raw = str_param(p, "source").or_else(|| str_param(p, "range"));
+    if raw.is_none() {
+        // Menu-style call: Change PivotTable Data Source, filled with the current source.
+        let (si, pi) = find_pivot(s, p)?;
+        let (pivot, source) = {
+            let d = s.doc()?;
+            let pt = d.wb.sheet(si).and_then(|sh| sh.pivots.get(pi)).ok_or_else(|| other("There's no such PivotTable."))?;
+            (pt.name.clone(), pt.source.clone())
+        };
+        s.ui_requests.push(crate::UiRequest::Dialog("pivotChangeSource".into(), json!({"pivot": pivot, "source": source})));
+        return ok();
+    }
+    if raw.is_some_and(|t| t.trim().is_empty()) {
+        return Err(other("The reference isn't valid."));
     }
     let source = source_param(s, p)?;
     let (si, _) = find_pivot(s, p)?;

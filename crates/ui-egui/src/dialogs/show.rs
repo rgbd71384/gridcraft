@@ -552,7 +552,7 @@ fn form(app: &SheetApp, ui: &mut egui::Ui, d: &mut Dialog, confirm: &mut bool, o
 /// Enter sets the width, as in Excel.
 /// Keeps asking until the field really has focus: a new window's first frame is an invisible
 /// sizing pass where a focus request is ignored.
-pub(super) fn take_first_focus(d: &mut Dialog, r: &egui::Response) {
+pub(in crate::dialogs) fn take_first_focus(d: &mut Dialog, r: &egui::Response) {
     if !d.focus_first_field {
         return;
     }
