@@ -78,7 +78,8 @@ fn a_saved_analyze_tab_without_a_pivot_opens_on_home() {
 #[test]
 fn change_data_source_applies_the_range_from_the_dialog() {
     let mut h = harness(session());
-    let before = report_total(&h);
+    // East 100, West 80 and East 30.
+    assert_eq!(report_total(&h), 210.0);
     let old = source_of(&h);
     h.state_mut().ui.ribbon_tab = "PivotTable Analyze".into();
     h.run_steps(2);
@@ -88,14 +89,14 @@ fn change_data_source_applies_the_range_from_the_dialog() {
     let dialog = h.state().dialog.as_ref().expect("the button opens the dialog");
     assert_eq!(dialog.title, "Change PivotTable Data Source");
     assert_eq!(dialog.values["source"], json!(old));
-    // Drop the last source row. The grand total must fall with it.
+    // Drop the last source row, the one that holds 30.
     h.state_mut().dialog.as_mut().unwrap().values.insert("source".into(), json!("Sheet1!$A$1:$B$3"));
     h.run_steps(1);
     key(&mut h, Key::Enter, Modifiers::NONE);
     assert!(h.state().dialog.is_none(), "OK closes the dialog: {:?}", h.state().message);
     let source = source_of(&h);
     assert!(source.contains("$B$3"), "{source}");
-    assert!(report_total(&h) < before, "the smaller source totals less than {before}");
+    assert_eq!(report_total(&h), 180.0, "removing the row that holds 30 leaves 180");
     // The cell the dialog was opened on is still the anchor, so the tab stays.
     assert_eq!(h.state().session.active().unwrap().selection.active, CellRef::parse("D3").unwrap());
 }
